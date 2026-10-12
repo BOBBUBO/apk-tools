@@ -28,7 +28,7 @@ jobs:
           TERMUX_PKG_VERSION=3.0.8
           TERMUX_PKG_SRCURL="git+${{ github.server_url }}/${{ github.repository }}.git"
           TERMUX_PKG_GIT_BRANCH=master
-          TERMUX_PKG_DEPENDS="openssl, zlib, libzstd"
+          TERMUX_PKG_DEPENDS="openssl, zlib, zstd"
           TERMUX_PKG_EXTRA_CONFIGURE_ARGS="-Ddocs=disabled -Dlua=disabled -Dpython=disabled -Dtests=disabled"
           EOF
 
