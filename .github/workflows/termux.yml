@@ -14,23 +14,15 @@ jobs:
         target_arch: [aarch64, arm, i686, x86_64]
       fail-fast: false
     steps:
+      - uses: actions/checkout@v4
+        with:
+          path: self
+
       - name: Clone termux-packages
         run: git clone --depth 1 https://github.com/termux/termux-packages.git
 
       - name: Add apk-tools package
-        run: |
-          mkdir -p termux-packages/packages/apk-tools
-          cat > termux-packages/packages/apk-tools/build.sh << 'EOF'
-          TERMUX_PKG_HOMEPAGE="https://gitlab.alpinelinux.org/apk-tools"
-          TERMUX_PKG_DESCRIPTION="Alpine Package Keeper for Termux"
-          TERMUX_PKG_LICENSE="GPL-2.0-only"
-          TERMUX_PKG_MAINTAINER="@termux"
-          TERMUX_PKG_VERSION=3.0.8
-          TERMUX_PKG_SRCURL="git+${{ github.server_url }}/${{ github.repository }}.git"
-          TERMUX_PKG_GIT_BRANCH=master
-          TERMUX_PKG_DEPENDS="openssl, zlib, zstd"
-          TERMUX_PKG_EXTRA_CONFIGURE_ARGS="-Ddocs=disabled -Dlua=disabled -Dpython=disabled -Dtests=disabled"
-          EOF
+        run: cp -r self/packages/apk-tools termux-packages/packages/apk-tools
 
       - name: Build package in docker
         run: |
