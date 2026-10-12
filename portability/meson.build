@@ -10,6 +10,7 @@ check_symbols = [
 	['memfd_create', '', 'NEED_MEMFD_CREATE', 'sys/mman.h'],
 	['mknodat', 'mknodat.c', 'NEED_MKNODAT', 'sys/stat.h'],
 	['pipe2', 'pipe2.c', 'NEED_PIPE2', 'unistd.h'],
+	['posix_spawn', 'posix_spawn.c', 'NEED_POSIX_SPAWN', 'spawn.h'],
 	['qsort_r', 'qsort_r.c', 'NEED_QSORT_R', 'stdlib.h'],
 	['reallocarray', 'reallocarray.c', 'NEED_REALLOCARRAY', 'stdlib.h'],
 	['strchrnul', 'strchrnul.c', 'NEED_STRCHRNUL', 'string.h'],
