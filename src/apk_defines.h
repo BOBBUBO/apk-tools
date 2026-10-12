@@ -32,6 +32,9 @@
 #define APK_YES		1
 #define APK_AUTO	2
 
+#ifndef APK_PREFIX
+#define APK_PREFIX	"/usr"
+#endif
 #ifndef APK_CONFDIR
 #define APK_CONFDIR	"/etc/apk"
 #endif

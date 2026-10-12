@@ -56,6 +56,16 @@ void apk_ctx_free(struct apk_ctx *ac)
 	apk_balloc_destroy(&ac->ba);
 }
 
+static const char *apk_ctx_default_root(void)
+{
+#ifdef __ANDROID__
+	/* On Android/Termux "/" is inaccessible; manage the $PREFIX installation instead. */
+	return APK_PREFIX;
+#else
+	return "/";
+#endif
+}
+
 int apk_ctx_prepare(struct apk_ctx *ac)
 {
 	apk_out_configure_progress(&ac->out, ac->on_tty);
@@ -69,10 +79,10 @@ int apk_ctx_prepare(struct apk_ctx *ac)
 	if (ac->flags & APK_ALLOW_UNTRUSTED) ac->trust.allow_untrusted = 1;
 	if (!ac->cache_dir) ac->cache_dir = "etc/apk/cache";
 	else ac->cache_dir_set = 1;
-	if (!ac->root) ac->root = "/";
+	if (!ac->root) ac->root = apk_ctx_default_root();
 	if (ac->cache_predownload) ac->cache_packages = 1;
 
-	if (!strcmp(ac->root, "/")) {
+	if (!strcmp(ac->root, apk_ctx_default_root())) {
 		// No chroot needed if using system root
 		ac->flags |= APK_NO_CHROOT;
 
@@ -105,8 +115,13 @@ int apk_ctx_prepare(struct apk_ctx *ac)
 			}
 		} else {
 			if (uid != 0) {
+#ifdef __ANDROID__
+				/* Termux/Android userland has no root access: usermode is the only possibility. */
+				ac->open_flags |= APK_OPENF_USERMODE;
+#else
 				apk_err(&ac->out, "Use --usermode to allow creating database as non-root");
 				return -EINVAL;
+#endif
 			}
 		}
 	}

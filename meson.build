@@ -13,6 +13,7 @@ apk_prefix = get_option('prefix')
 apk_confdir = apk_prefix / get_option('sysconfdir') / 'apk'
 apk_libdir = apk_prefix / get_option('libdir')
 
+add_project_arguments('-DAPK_PREFIX="@0@"'.format(apk_prefix), language: 'c')
 add_project_arguments('-DAPK_CONFDIR="@0@"'.format(apk_confdir), language: 'c')
 add_project_arguments('-DAPK_LIBDIR="@0@"'.format(apk_libdir), language: 'c')
 
