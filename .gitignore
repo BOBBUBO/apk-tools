@@ -13,3 +13,5 @@ libfetch/*err.h
 config.mk
 repo
 .apk-sign
+.apk-bootstrap/
+apk-bootstrap-*.zip
