@@ -9,8 +9,18 @@ so_version = run_command('cat', 'SOVERSION', check: true).stdout().strip()
 
 pkgc = import('pkgconfig')
 
-apk_confdir = get_option('sysconfdir') / 'apk'
-apk_libdir = get_option('libdir')
+apk_prefix = get_option('prefix')
+apk_confdir = apk_prefix / get_option('sysconfdir') / 'apk'
+apk_libdir = apk_prefix / get_option('libdir')
+
+add_project_arguments('-DAPK_CONFDIR="@0@"'.format(apk_confdir), language: 'c')
+add_project_arguments('-DAPK_LIBDIR="@0@"'.format(apk_libdir), language: 'c')
+
+# Termux/Android has no sbin; helpers live in $PREFIX/bin
+if host_machine.system() == 'android'
+	apk_uvol_path = apk_prefix / 'bin' / 'uvol'
+	add_project_arguments('-DAPK_UVOL_PATH="@0@"'.format(apk_uvol_path), language: 'c')
+endif
 
 lua_name = 'lua' + get_option('lua_version')
 lua_bin_name = get_option('lua_bin')

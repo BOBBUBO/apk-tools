@@ -32,6 +32,16 @@
 #define APK_YES		1
 #define APK_AUTO	2
 
+#ifndef APK_CONFDIR
+#define APK_CONFDIR	"/etc/apk"
+#endif
+#ifndef APK_LIBDIR
+#define APK_LIBDIR	"/lib"
+#endif
+#ifndef APK_UVOL_PATH
+#define APK_UVOL_PATH	"/usr/sbin/uvol"
+#endif
+
 enum {
 	APKE_FIRST_VALUE = 1024,
 

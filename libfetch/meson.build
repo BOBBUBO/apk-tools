@@ -6,10 +6,10 @@ libfetch_src = [
 ]
 
 libfetch_cargs = [
-	'-DCA_CERT_FILE="/' + apk_confdir / 'ca.pem"',
-	'-DCA_CRL_FILE="/' + apk_confdir / 'crl.pem"',
-	'-DCLIENT_CERT_FILE="/' + apk_confdir / 'cert.pem"',
-	'-DCLIENT_KEY_FILE="/' + apk_confdir / 'cert.key"',
+	'-DCA_CERT_FILE="@0@"'.format(apk_confdir / 'ca.pem'),
+	'-DCA_CRL_FILE="@0@"'.format(apk_confdir / 'crl.pem'),
+	'-DCLIENT_CERT_FILE="@0@"'.format(apk_confdir / 'cert.pem'),
+	'-DCLIENT_KEY_FILE="@0@"'.format(apk_confdir / 'cert.key'),
 ]
 
 libfetch = static_library(

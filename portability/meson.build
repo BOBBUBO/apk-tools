@@ -4,6 +4,8 @@ libportability_src = []
 
 check_symbols = [
 	['getrandom', 'getrandom.c', 'NEED_GETRANDOM', 'sys/random.h'],
+	['fgetgrent', 'fgetgrent.c', 'NEED_FGETGRENT', 'grp.h'],
+	['fgetpwent', 'fgetpwent.c', 'NEED_FGETPWENT', 'pwd.h'],
 	['memrchr', 'memrchr.c', 'NEED_MEMRCHR', 'string.h'],
 	['memfd_create', '', 'NEED_MEMFD_CREATE', 'sys/mman.h'],
 	['mknodat', 'mknodat.c', 'NEED_MKNODAT', 'sys/stat.h'],

@@ -29,7 +29,10 @@
 #define HAVE_FGETPWENT_R
 #define HAVE_FGETGRENT_R
 #endif
-#if defined(__linux__) && defined(O_TMPFILE)
+#if defined(__linux__) && defined(O_TMPFILE) && !defined(__ANDROID__)
+/* Android/SELinux blocks linkat via /proc/self/fd, so the O_TMPFILE
+ * safe-write path cannot link the file into place - use the classic
+ * tmpname + renameat fallback there instead. */
 #define HAVE_O_TMPFILE
 #endif
 

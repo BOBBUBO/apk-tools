@@ -521,8 +521,8 @@ static int load_config(struct apk_ctx *ac)
 	apk_blob_t space = APK_BLOB_STRLIT(" "), line, value;
 	int r;
 
-	is = apk_istream_from_file(AT_FDCWD, getenv("APK_CONFIG") ?: "/etc/apk/config");
-	if (is == ERR_PTR(-ENOENT)) is = apk_istream_from_file(AT_FDCWD, "/lib/apk/config");
+	is = apk_istream_from_file(AT_FDCWD, getenv("APK_CONFIG") ?: APK_CONFDIR "/config");
+	if (is == ERR_PTR(-ENOENT)) is = apk_istream_from_file(AT_FDCWD, APK_LIBDIR "/apk/config");
 	if (IS_ERR(is)) return PTR_ERR(is);
 
 	while (apk_istream_get_delim(is, newline, &line) == 0) {
@@ -637,7 +637,7 @@ int main(int argc, char **argv)
 	apk_crypto_init();
 	apk_ctx_init(&ctx);
 	ctx.on_tty = isatty(STDOUT_FILENO);
-	ctx.interactive = (access("/etc/apk/interactive", F_OK) == 0) ? APK_AUTO : APK_NO;
+	ctx.interactive = (access(APK_CONFDIR "/interactive", F_OK) == 0) ? APK_AUTO : APK_NO;
 	ctx.pretty_print = APK_AUTO;
 	ctx.out.progress = APK_AUTO;
 
