@@ -12,17 +12,32 @@
 #                                           newer version in the apt repos
 #   ./repack-debs.sh cbonsai ...         -> repackage named apt packages + deps
 #   ./repack-debs.sh --update cbonsai    -> same, but force-refresh if outdated
+#   ./repack-debs.sh --x11 pkg ...       -> same, but writes into x11-repo/
+#                                           (requires the x11 apt channel
+#                                           enabled, e.g. pkg install x11-repo)
 set -eu
 
-REPO_DIR="repo"
+USE_X11=0
+for a in "$@"; do [ "$a" = "--x11" ] && USE_X11=1; done
+
+if [ "$USE_X11" -eq 1 ]; then REPO_DIR="x11-repo"; else REPO_DIR="repo"; fi
 REPO_ARCH="aarch64"
 KEYSIGN_DIR=".apk-sign"
-KEYID="apk-termux@local"
+KEYID="apk-termux@local"	# same signing key for both repos
 TERMUX_PREFIX_GLOB="data/data/com.termux/files/usr"
-DOWNLOAD_DIR="$KEYSIGN_DIR/apt-debs"
-MANIFEST="$KEYSIGN_DIR/manifest.txt"
+DOWNLOAD_DIR="$KEYSIGN_DIR/apt-debs-$REPO_DIR"
+MANIFEST="$KEYSIGN_DIR/manifest-${REPO_DIR}.txt"
+
+# migrate legacy single-repo manifest only into the main repo manifest
+if [ "$USE_X11" -eq 0 ] && [ -f "$KEYSIGN_DIR/manifest.txt" ] && [ ! -f "$MANIFEST" ]; then
+	mv "$KEYSIGN_DIR/manifest.txt" "$MANIFEST"
+fi
 
 mkdir -p "$KEYSIGN_DIR" "$DOWNLOAD_DIR"
+# legacy shared deb cache: migrate into the main repo cache once
+if [ -d "$KEYSIGN_DIR/apt-debs" ] && [ $USE_X11 -eq 0 ]; then
+	mv -n "$KEYSIGN_DIR"/apt-debs/*.deb "$DOWNLOAD_DIR/" 2>/dev/null || true
+fi
 touch "$MANIFEST"
 
 # Sync manifest from the existing index (last wins = index truth)
@@ -150,7 +165,8 @@ while [ $# -gt 0 ]; do
 		--auto) AUTO="${2:?--auto needs a count}"; shift 2 ;;
 		--size-cap) SIZE_CAP_KB="${2:?--size-cap needs KBs}"; shift 2 ;;
 		--update) UPDATE_ONLY=1; shift ;;
-		-h|--help) grep '^#' "$0" | head -14; exit 0 ;;
+		--x11) shift ;;
+		-h|--help) grep '^#' "$0" | head -16; exit 0 ;;
 		*) ARGS+=("$1"); shift ;;
 	esac
 done
@@ -221,12 +237,14 @@ if [ ${#NAMES[@]} -gt 0 ]; then
 	done
 	echo "apt closure: ${!wanted[*]}"
 	for pkg in "${!wanted[@]}"; do
-		if ! ls "$DOWNLOAD_DIR/${pkg}"_*_*.deb >/dev/null 2>&1; then
+		f=$(ls "$DOWNLOAD_DIR/${pkg}"_*_*.deb 2>/dev/null | head -1)
+		if [ -z "$f" ]; then
 			echo "downloading: $pkg"
 			(cd "$DOWNLOAD_DIR" && apt-get download "$pkg" >/dev/null)
+			f=$(ls "$DOWNLOAD_DIR/${pkg}"_*_*.deb 2>/dev/null | head -1)
 		fi
+		[ -n "$f" ] && DEBS+=("$f")
 	done
-	for f in "$DOWNLOAD_DIR"/*_*.deb; do DEBS+=("$f"); done
 fi
 
 # cwd debs if nothing was given at all
