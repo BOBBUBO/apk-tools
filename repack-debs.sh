@@ -15,6 +15,8 @@
 #   ./repack-debs.sh --x11 pkg ...       -> same, but writes into x11-repo/
 #                                           (requires the x11 apt channel
 #                                           enabled, e.g. pkg install x11-repo)
+#   ./repack-debs.sh --rm pkg ...        -> remove packages from the repo
+#                                           (combine with --x11 for x11-repo/)
 set -eu
 
 USE_X11=0
@@ -158,6 +160,8 @@ pkg_mkapk() {
 # ---------------------------------------------------------------------------
 # argument parsing
 # ---------------------------------------------------------------------------
+# ACT=add (default) | rm
+ACT=add
 AUTO=0 UPDATE_ONLY=0 SIZE_CAP_KB=$((64*1024))
 declare -a ARGS=()
 while [ $# -gt 0 ]; do
@@ -166,7 +170,8 @@ while [ $# -gt 0 ]; do
 		--size-cap) SIZE_CAP_KB="${2:?--size-cap needs KBs}"; shift 2 ;;
 		--update) UPDATE_ONLY=1; shift ;;
 		--x11) shift ;;
-		-h|--help) grep '^#' "$0" | head -16; exit 0 ;;
+		--rm) ACT=rm; shift ;;
+		-h|--help) grep '^#' "$0" | head -18; exit 0 ;;
 		*) ARGS+=("$1"); shift ;;
 	esac
 done
@@ -180,6 +185,31 @@ pkg_size_ok() {
 }
 
 declare -a DEBS=()
+
+# ---------------------------------------------------------------------------
+# --rm: remove packages from the repo (apk file + manifest entry)
+# ---------------------------------------------------------------------------
+if [ "$ACT" = "rm" ]; then
+	[ ${#ARGS[@]} -gt 0 ] || { echo "usage: $0 --rm pkg ..."; exit 64; }
+	removed=0
+	for name in "${ARGS[@]}"; do
+		ver="$(manifest_get "$name")"
+		if [ -z "$ver" ]; then
+			echo "warn: not in repo manifest: $name" >&2
+		else
+			old="$REPO_DIR/$REPO_ARCH/$name-$ver.apk"
+			[ -f "$old" ] && { rm -f "$old"; echo "removed: $old"; }
+			grep -v "^$name " "$MANIFEST" > "$MANIFEST.tmp" 2>/dev/null; mv "$MANIFEST.tmp" "$MANIFEST"
+			removed=$((removed+1))
+		fi
+	done
+	echo "removed $removed package(s), rebuilding index..."
+	abs_keysign="$(cd "$KEYSIGN_DIR" && pwd)"
+	(cd "$REPO_DIR/$REPO_ARCH" && apk mkndx --sign-key "$abs_keysign/$KEYID.rsa" \
+		-o APKINDEX.adb --description "termux-converted repo" *.apk)
+	echo "Repository at $REPO_DIR/$REPO_ARCH ($(ls "$REPO_DIR/$REPO_ARCH"/*.apk | wc -l) packages)"
+	exit 0
+fi
 
 # ---------------------------------------------------------------------------
 # --auto N: pick N packages from the apt repo that are new or outdated here
