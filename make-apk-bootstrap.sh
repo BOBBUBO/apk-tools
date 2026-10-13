@@ -19,6 +19,7 @@ DEPS="zlib zstd openssl ca-certificates"
 # packages removed from the stock bootstrap tree
 APT_PKGS="apt libapt-pkg dpkg termux-keyring"
 OUT="$(pwd)/apk-bootstrap-$ARCH.zip"
+MOTD="$(pwd)/motd"
 
 for cmd in curl unzip zip tar ar; do
 	command -v "$cmd" >/dev/null || { echo "missing tool: $cmd"; exit 1; }
@@ -181,6 +182,14 @@ case "\$1" in
 	*) echo "pkg -> apk shim; unknown verb '\$1', try: install, remove, search, update, upgrade" >&2; exit 64 ;;
 esac
 EOF
+
+# ---------------------------------------------------------------------------
+# 6a. motd
+# ---------------------------------------------------------------------------
+if [ -f "$MOTD" ]; then
+	log "installing custom motd"
+	install -Dm644 "$MOTD" "$WORKDIR/tree/etc/motd"
+fi
 
 # ---------------------------------------------------------------------------
 # 7. regenerate SYMLINKS.txt and rezip

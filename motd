@@ -1,0 +1,21 @@
+Welcome to Termux!
+
+Docs:       https://termux.dev/docs
+Donate:     https://termux.dev/donate
+Community:  https://termux.dev/community
+[dont report issues with apk/pkg to termux!]
+
+Working with packages:
+
+ - Search:  apk search/pkg search <query>
+ - Install: apk add/pkg install <package>
+ + Update:  apk update/pkg update
+ - Upgrade: apk upgrade/pkg upgrade
+
+Subscribing to additional repositories:
+
+ - Root:    apk add/pkg install root-repo
+ - X11:     apk add/pkg install x11-repo
+
+Report issues with termux (the app) at https://termux.dev/issues
+And any with apk/apk repo to me https://github.com/BOBBUBO/apk-tools/issues
