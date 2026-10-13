@@ -16,3 +16,4 @@ repo
 .apk-bootstrap/
 apk-bootstrap-*.zip
 .apk-bootstrap/
+x11-repo

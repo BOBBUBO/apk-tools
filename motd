@@ -9,7 +9,7 @@ Working with packages:
 
  - Search:  apk search/pkg search <query>
  - Install: apk add/pkg install <package>
- + Update:  apk update/pkg update
+ - Update:  apk update/pkg update
  - Upgrade: apk upgrade/pkg upgrade
 
 Subscribing to additional repositories:
@@ -18,4 +18,5 @@ Subscribing to additional repositories:
  - X11:     apk add/pkg install x11-repo
 
 Report issues with termux (the app) at https://termux.dev/issues
-And any with apk/apk repo to me https://github.com/BOBBUBO/apk-tools/issues
+And any with apk https://github.com/BOBBUBO/apk-tools/issues
+
