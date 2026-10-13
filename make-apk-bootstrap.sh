@@ -86,8 +86,10 @@ rm -rf "$WORKDIR/tree/etc/apt" \
 	"$WORKDIR/tree/var/cache/apt" \
 	"$WORKDIR/tree/var/log/apt" \
 	"$WORKDIR/tree/share/termux-keyring"
-# prune directories emptied by the removal
-find "$WORKDIR/tree" -type d -empty -delete 2>/dev/null || true
+# prune directories emptied by the removal, but keep skeleton dirs we need
+find "$WORKDIR/tree" -type d -empty -not -path "*/tmp" -delete 2>/dev/null || true
+# tmp/ must exist (Xorg etc. put lock files there)
+install -dm700 "$WORKDIR/tree/tmp"
 
 # ---------------------------------------------------------------------------
 # 3. fetch + inject dependency debs from the termux repo
@@ -153,6 +155,9 @@ if [ -n "$ss" ]; then
 	SELF_DIR="\$(cd "\$(dirname "\$0")" && pwd)"
 	# run once: atomic lock via symlink
 	ln -s . "\$SELF_DIR/\$(basename "\$0").lock" 2>/dev/null || exit 0
+	tmpdir="$PREFIX/tmp"
+	mkdir -p "\$tmpdir"
+	chmod 1777 "\$tmpdir" 2>/dev/null || true
 	# initialize the apk database
 	"\$PREFIX/bin/apk" add --initdb >/dev/null 2>&1 || true
 	exit 0
