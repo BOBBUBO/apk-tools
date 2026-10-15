@@ -127,6 +127,18 @@ pkg_mkapk() {
 	done
 	apk_deps="$(echo "$apk_deps" | xargs)"
 
+	# extract control scripts (postinst etc.) to carry into the apk
+	local ctrl="$KEYSIGN_DIR/ctrl-$pkgname"
+	rm -rf "$ctrl"; mkdir -p "$ctrl"
+	local abs_deb="$(cd "$(dirname "$deb")" && pwd)/$(basename "$deb")"
+	(
+		cd "$ctrl"
+		ar x "$abs_deb" 2>/dev/null || return 0
+		for f in control.tar.xz control.tar.gz control.tar.zst control.tar.bz2 control.tar; do
+			[ -f "$f" ] && tar xf "$f" && break
+		done
+	)
+
 	local stagedir="$KEYSIGN_DIR/stage-$pkgname"
 	rm -rf "$stagedir"; mkdir -p "$stagedir"
 	dpkg-deb -x "$deb" "$stagedir"
@@ -135,6 +147,27 @@ pkg_mkapk() {
 		cp -a "$stagedir/$TERMUX_PREFIX_GLOB/." "$stagedir/"
 		rm -rf "$stagedir/data"
 	fi
+
+	# strip that writable bit from .apk payloads so ART accepts them as dex
+	# (e.g. termux-x11's loader.apk — postinst on stock does the same)
+	find "$stagedir" -type f -name '*.apk' -exec chmod a-w {} + 2>/dev/null || true
+
+	# Carry over maintainer scripts (mapping: deb name -> apk name)
+	# Only include ones we know will run sanely; most termux postinsts
+	# only do chmod/symlink fixes, paths are $PREFIX-relative usually.
+	local script_args=() s apk_t deb_t
+	for s in preinst postinst prerm postrm; do
+		[ -f "$ctrl/$s" ] || continue
+		case "$s" in
+			preinst)  apk_t=pre-install ;;
+			postinst) apk_t=post-install ;;
+			prerm)    apk_t=pre-deinstall ;;
+			postrm)   apk_t=post-deinstall ;;
+		esac
+		# strip the dpkg boilerplate calls that apk doesn't pass arguments for
+		# (eg: scripts testing "$1" = configure)
+		script_args+=("--script" "$apk_t:$ctrl/$s")
+	done
 
 	[ "$arch" = "all" ] && arch="noarch"
 	mkdir -p "$REPO_DIR/$REPO_ARCH"
@@ -146,6 +179,7 @@ pkg_mkapk() {
 		--info "arch:$arch" \
 		--sign-key "$(cd "$KEYSIGN_DIR" && pwd)/$KEYID.rsa" \
 		--output "$out"
+	[ ${#script_args[@]} -gt 0 ] && set -- "$@" "${script_args[@]}"
 	[ -n "$desc" ]       && set -- "$@" --info "description:$desc"
 	[ -n "$maintainer" ] && set -- "$@" --info "maintainer:$maintainer"
 	[ -n "$homepage" ]   && set -- "$@" --info "url:$homepage"
@@ -154,7 +188,7 @@ pkg_mkapk() {
 	apk "$@"
 	manifest_put "$pkgname" "$version"
 
-	rm -rf "$stagedir"
+	rm -rf "$stagedir" "$ctrl"
 }
 
 # ---------------------------------------------------------------------------
