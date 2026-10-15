@@ -17,6 +17,8 @@
 #                                           enabled, e.g. pkg install x11-repo)
 #   ./repack-debs.sh --rm pkg ...        -> remove packages from the repo
 #                                           (combine with --x11 for x11-repo/)
+#   ./repack-debs.sh --force pkg ...     -> force rebuild even if up-to-date
+#                                           (bypasses up-to-date check)
 set -eu
 
 USE_X11=0
@@ -42,14 +44,6 @@ if [ -d "$KEYSIGN_DIR/apt-debs" ] && [ $USE_X11 -eq 0 ]; then
 fi
 touch "$MANIFEST"
 
-# Sync manifest from the existing index (last wins = index truth)
-if [ -f "$REPO_DIR/$REPO_ARCH/APKINDEX.adb" ]; then
-	{ cat "$MANIFEST"
-	  apk adbdump "$REPO_DIR/$REPO_ARCH/APKINDEX.adb" 2>/dev/null \
-		| awk '/name:/{n=$NF} /version:/{print n, $NF}'
-	} | awk '{v[$1]=$2} END{for (k in v) print k, v[k]}' > "$MANIFEST.new"
-	mv "$MANIFEST.new" "$MANIFEST"
-fi
 if [ ! -f "$KEYSIGN_DIR/$KEYID.rsa" ]; then
 	openssl genrsa -out "$KEYSIGN_DIR/$KEYID.rsa" 2048 2>/dev/null
 	openssl rsa -in "$KEYSIGN_DIR/$KEYID.rsa" -pubout -out "$KEYSIGN_DIR/$KEYID.rsa.pub" 2>/dev/null
@@ -58,6 +52,19 @@ fi
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
+human_size() {
+	local bytes=$1
+	if [ "$bytes" -ge 1073741824 ]; then
+		echo "$(( (bytes + 536870911) / 1073741824 )) GB"
+	elif [ "$bytes" -ge 1048576 ]; then
+		echo "$(( (bytes + 524287) / 1048576 )) MB"
+	elif [ "$bytes" -ge 1024 ]; then
+		echo "$(( (bytes + 511) / 1024 )) KB"
+	else
+		echo "${bytes} B"
+	fi
+}
 
 # deb version -> apk version: strip epoch, 'N-M' -> 'N-rM', sanitize junk
 apk_version_of_deb() {
@@ -83,8 +90,13 @@ manifest_put() {
 # returns 0 if the package needs (re)building: no entry, or newer apt version
 repo_needs_build() {
 	local name="$1" want="$2" have
+	[ "$FORCE" -eq 1 ] && return 0
 	have="$(manifest_get "$name")"
 	[ -z "$have" ] && return 0
+	# Also check if the .apk file actually exists in the repo
+	if [ ! -f "$REPO_DIR/$REPO_ARCH/$name-$have.apk" ]; then
+		return 0  # manifest has entry but file missing -> rebuild
+	fi
 	[ "$have" = "$want" ] && return 1	# duplicate, unchanged
 	local cmp
 	cmp="$(apk version -t "$have" "$want" 2>/dev/null || echo '?')"
@@ -196,6 +208,7 @@ pkg_mkapk() {
 # ---------------------------------------------------------------------------
 # ACT=add (default) | rm
 ACT=add
+FORCE=0
 AUTO=0 UPDATE_ONLY=0 SIZE_CAP_KB=$((64*1024))
 declare -a ARGS=()
 while [ $# -gt 0 ]; do
@@ -205,7 +218,8 @@ while [ $# -gt 0 ]; do
 		--update) UPDATE_ONLY=1; shift ;;
 		--x11) shift ;;
 		--rm) ACT=rm; shift ;;
-		-h|--help) grep '^#' "$0" | head -18; exit 0 ;;
+		--force) FORCE=1; shift ;;
+		-h|--help) grep '^#' "$0" | head -20; exit 0 ;;
 		*) ARGS+=("$1"); shift ;;
 	esac
 done
@@ -241,7 +255,31 @@ if [ "$ACT" = "rm" ]; then
 	abs_keysign="$(cd "$KEYSIGN_DIR" && pwd)"
 	(cd "$REPO_DIR/$REPO_ARCH" && apk mkndx --sign-key "$abs_keysign/$KEYID.rsa" \
 		-o APKINDEX.adb --description "termux-converted repo" *.apk)
-	echo "Repository at $REPO_DIR/$REPO_ARCH ($(ls "$REPO_DIR/$REPO_ARCH"/*.apk | wc -l) packages)"
+
+	# Calculate and display total size
+	total_bytes=0
+	while IFS= read -r apk_file; do
+		[ -f "$apk_file" ] || continue
+		size=$(stat -c%s "$apk_file" 2>/dev/null || stat -f%z "$apk_file" 2>/dev/null)
+		[ -n "$size" ] && total_bytes=$((total_bytes + size))
+	done < <(ls "$REPO_DIR/$REPO_ARCH"/*.apk 2>/dev/null)
+
+	pkg_count=$(ls "$REPO_DIR/$REPO_ARCH"/*.apk 2>/dev/null | wc -l)
+
+	human_size() {
+		local bytes=$1
+		if [ "$bytes" -ge 1073741824 ]; then
+			echo "$(( (bytes + 536870911) / 1073741824 )) GB"
+		elif [ "$bytes" -ge 1048576 ]; then
+			echo "$(( (bytes + 524287) / 1048576 )) MB"
+		elif [ "$bytes" -ge 1024 ]; then
+			echo "$(( (bytes + 511) / 1024 )) KB"
+		else
+			echo "${bytes} B"
+		fi
+	}
+
+	echo "Repository at $REPO_DIR/$REPO_ARCH ($pkg_count packages, $(human_size $total_bytes))"
 	exit 0
 fi
 
@@ -300,10 +338,26 @@ if [ ${#NAMES[@]} -gt 0 ]; then
 			| awk '{print $2}')
 	done
 	echo "apt closure: ${!wanted[*]}"
+	# Pre-fetch package sizes for dnf-style download summary
+	declare -A pkg_sizes
+	for pkg in "${!wanted[@]}"; do
+		sz=$(apt-cache show "$pkg" 2>/dev/null | awk '/^Size:/{print $2; exit}')
+		[ -n "$sz" ] && pkg_sizes["$pkg"]=$sz
+	done
+
+	# Initialize download size counter
+	total_download_bytes=0
+
 	for pkg in "${!wanted[@]}"; do
 		f=$(ls "$DOWNLOAD_DIR/${pkg}"_*_*.deb 2>/dev/null | head -1)
 		if [ -z "$f" ]; then
-			echo "downloading: $pkg"
+			sz="${pkg_sizes[$pkg]:-0}"
+			if [ "$sz" -gt 0 ]; then
+				echo "Downloading: $pkg ($(human_size $sz))"
+			else
+				echo "Downloading: $pkg"
+			fi
+			total_download_bytes=$((total_download_bytes + sz))
 			(cd "$DOWNLOAD_DIR" && apt-get download "$pkg" >/dev/null)
 			f=$(ls "$DOWNLOAD_DIR/${pkg}"_*_*.deb 2>/dev/null | head -1)
 		fi
@@ -336,6 +390,8 @@ done
 
 echo "repackaged: $built new/updated packages"
 
+echo "Total download size: $(human_size $total_download_bytes)"
+
 # ---------------------------------------------------------------------------
 # rebuild + sign index, publish pubkey
 # ---------------------------------------------------------------------------
@@ -345,4 +401,27 @@ abs_keysign="$(cd "$KEYSIGN_DIR" && pwd)"
 cp "$KEYSIGN_DIR/$KEYID.rsa.pub" "$REPO_DIR/$KEYID.rsa.pub"
 
 echo
-echo "Repository at $REPO_DIR/$REPO_ARCH ($(ls "$REPO_DIR/$REPO_ARCH"/*.apk | wc -l) packages)"
+# Calculate and display total size (dnf-style summary)
+total_bytes=0
+while IFS= read -r apk_file; do
+	[ -f "$apk_file" ] || continue
+	size=$(stat -c%s "$apk_file" 2>/dev/null || stat -f%z "$apk_file" 2>/dev/null)
+	[ -n "$size" ] && total_bytes=$((total_bytes + size))
+done < <(ls "$REPO_DIR/$REPO_ARCH"/*.apk 2>/dev/null)
+
+pkg_count=$(ls "$REPO_DIR/$REPO_ARCH"/*.apk 2>/dev/null | wc -l)
+
+human_size() {
+	local bytes=$1
+	if [ "$bytes" -ge 1073741824 ]; then
+		echo "$(( (bytes + 536870911) / 1073741824 )) GB"
+	elif [ "$bytes" -ge 1048576 ]; then
+		echo "$(( (bytes + 524287) / 1048576 )) MB"
+	elif [ "$bytes" -ge 1024 ]; then
+		echo "$(( (bytes + 511) / 1024 )) KB"
+	else
+		echo "${bytes} B"
+	fi
+}
+
+echo "Repository at $REPO_DIR/$REPO_ARCH ($pkg_count packages, $(human_size $total_bytes))"
