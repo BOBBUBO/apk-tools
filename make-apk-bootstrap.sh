@@ -15,7 +15,7 @@ ARCH="${1:-aarch64}"
 APKTOOLS_DEB="${2:-}"
 TERMUX_REPO="https://packages-cf.termux.dev/apt/termux-main"
 WORKDIR="$(pwd)/.apk-bootstrap/$ARCH"
-DEPS="zlib zstd openssl ca-certificates"
+DEPS="zlib zstd openssl ca-certificates ncurses readline"
 # packages removed from the stock bootstrap tree
 APT_PKGS="apt libapt-pkg dpkg termux-keyring"
 OUT="$(pwd)/apk-bootstrap-$ARCH.zip"
@@ -168,23 +168,37 @@ fi
 # 6. pkg compatibility shim (apt-style verbs -> apk)
 # ---------------------------------------------------------------------------
 log "installing pkg shim..."
-cat > "$WORKDIR/tree/bin/pkg" <<- EOF
-#!$TERMUX_PREFIX/bin/sh
+cat > "$WORKDIR/tree/bin/pkg" <<- 'EOF'
+#!/data/data/com.termux/files/usr/bin/sh
 # compatibility shim mapping 'pkg' verbs to apk
-case "\$1" in
-	install)         shift; exec apk add "\$@" ;;
-	reinstall)       shift; exec apk add --force-reinstall "\$@" ;;
-	remove|uninstall) shift; exec apk del "\$@" ;;
-	autoremove)      shift; exec apk del "\$@" ;;
-	search)          shift; exec apk search "\$@" ;;
-	show|info)       shift; exec apk info "\$@" ;;
-	files)           shift; exec apk info -L "\$@" ;;
-	list-installed)  exec apk list -I ;;
-	list-all)        exec apk list -a ;;
-	update)          exec apk update ;;
-	upgrade)         shift || :; exec apk upgrade "\$@" ;;
-	clean|autoclean) exec apk cache clean ;;
-	*) echo "pkg -> apk shim; unknown verb '\$1', try: install, remove, search, update, upgrade" >&2; exit 64 ;;
+# This replaces Termux's apt-based pkg wrapper for apk-based systems.
+
+set -e
+
+# ensure apk db exists
+[ -f /data/data/com.termux/files/usr/lib/apk/db/installed ] || apk add --initdb >/dev/null 2>&1 || true
+
+case "$1" in
+	install)           shift; exec apk add "$@" ;;
+	reinstall)         shift; exec apk add --force-reinstall "$@" ;;
+	remove|uninstall)  shift; exec apk del "$@" ;;
+	autoremove)        shift; exec apk del "$@" ;;
+	search)            shift; exec apk search "$@" ;;
+	show|info)         shift; exec apk info "$@" ;;
+	files)             shift; exec apk info -L "$@" ;;
+	list-installed)    exec apk list -I ;;
+	list-all)          exec apk list -a ;;
+	list-upgradable)   exec apk list -u ;;
+	update)            exec apk update ;;
+	upgrade)           shift || :; exec apk upgrade "$@" ;;
+	dist-upgrade)      shift || :; exec apk upgrade "$@" ;;
+	reinstall)         shift; exec apk add --force-reinstall "$@" ;;
+	clean|autoclean)   exec apk cache clean ;;
+	purge)             shift; exec apk del --purge "$@" ;;
+	policy)            shift; exec apk policy "$@" ;;
+	depends)           shift; exec apk info -d "$@" ;;
+	rdepends)          shift; exec apk info -r "$@" ;;
+	*) echo "pkg -> apk shim; unknown verb '$1', try: install, remove, search, update, upgrade, list, search, info" >&2; exit 64 ;;
 esac
 EOF
 

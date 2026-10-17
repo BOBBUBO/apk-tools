@@ -8,14 +8,13 @@ Community:  https://termux.dev/community
 Working with packages:
 
  - Search:  apk search/pkg search <query>
- - Install: apk add/pkg install <package>
+ - Install: apk add/pkg add <package>
  - Update:  apk update/pkg update
  - Upgrade: apk upgrade/pkg upgrade
 
 Subscribing to additional repositories:
 
- - Root:    apk add/pkg install root-repo
- - X11:     apk add/pkg install x11-repo
+ - X11:     apk add/pkg add x11-repo
 
 Report issues with termux (the app) at https://termux.dev/issues
 And any with apk https://github.com/BOBBUBO/apk-tools/issues
