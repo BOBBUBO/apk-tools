@@ -1,0 +1,69 @@
+name: Build Termux package
+
+on: [push, workflow_dispatch]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target_arch: [aarch64, arm, i686, x86_64]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: self
+
+      - name: Clone termux-packages
+        run: git clone --depth 1 https://github.com/termux/termux-packages.git
+
+      - name: Add apk-tools package
+        run: cp -r self/packages/apk-tools termux-packages/packages/apk-tools
+
+      - name: Build package in docker
+        run: |
+          cd termux-packages
+          ./scripts/run-docker.sh ./build-package.sh -I -C -a "${{ matrix.target_arch }}" --format debian -o output packages/apk-tools
+
+      - name: Upload apk-tools .deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-tools-${{ matrix.target_arch }}
+          path: termux-packages/output/apk-tools_*.deb
+          retention-days: 7
+
+  release:
+    needs: build
+    # Only release from the default branch (skip feature branches)
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all built packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: apk-tools-*
+          path: dist
+          merge-multiple: true
+
+      - name: List release files
+        run: ls -lh dist
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: apk-tools build ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            Automated build of `apk-tools` for Termux.
+
+            Commit: ${{ github.sha }}
+            Architectures: aarch64, arm, i686, x86_64
+          files: dist/*.deb
+          fail_on_unmatched_files: true
