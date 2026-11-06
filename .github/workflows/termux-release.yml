@@ -62,6 +62,7 @@ jobs:
           target_commitish: ${{ github.sha }}
           body: |
             Automated build of `apk-tools` for Termux.
+            may or may not work, not included in the bootstrap installer must install manually
 
             Commit: ${{ github.sha }}
             Architectures: aarch64, arm, i686, x86_64
